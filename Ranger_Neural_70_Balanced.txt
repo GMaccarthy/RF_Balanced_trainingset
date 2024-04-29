@@ -1,0 +1,176 @@
+
+rm(list = ls())
+library(data.table)
+library(ROSE)
+library(randomForest)
+library(vip)       # variable importance
+#library(tidyverse)
+library(readr)
+#library(tidymodels)
+#library(textrecipes)
+#library(LiblineaR)
+#library(tidytext)
+library(caret) #R.4.3.0
+library(randomForest)
+library(vip)       # variable importance
+library(tidyverse)
+library(readr)
+library(ranger) #R.4.2.2
+---------------------------------------------------------------------------------------------
+
+train_data<-fread("Rescaled_Balanced70_train.csv")
+
+#Feature Importance selected by Saturated Random Forest model(Fit70)
+
+train_data<-train_data[,c(1,6,7,3,8,10,11,9,20,4,19)]
+
+#Feature Importance selected by Saturated Random Forest model(Fit70)
+                             
+test<-test %>% select(HTN,Age,BMI,Sex,Total_Cholesterol,LDL,Sedentary_Lifestyle,HDL,
+      Total_Cholesterol_Genetic_Liability,LDL_Genetic_Liability,Smoking_Status)
+--------------------------------------------------------------------------------
+train<-as.data.frame(unclass(train),stringsAsFactors = TRUE)
+
+ set.seed(500)
+
+fitControl <- trainControl(
+    method = "cv",                   # k-fold cross validation
+    number = 5,                      # number of folds
+    savePredictions = 'final',       # saves predictions for optimal tuning parameter
+    classProbs = TRUE,                  # should class probabilities be returned
+    summaryFunction=twoClassSummary  # results summary function
+   ) 
+===================================================================================================================
+
+===================================================================================
+==================================================================================================================
+===============================================================================================================================
+
+# Training model for Clinical factors
+
+RF_NN_70 <- train(HTN ~., data= train_data, method='nnet', trControl = fitControl, verbose = FALSE, metric = "ROC")
+ 
+   print(RF_NN_70)
+---------------------------------------------------------------------------------------
+
+---------------------------------------------------------------------------------------
+#Extract Variable importance (VIP)
+
+
+library(vip) 
+ 
+vip<-vi(RF_NN_70)
+
+vip[(1:10),]
+
+vip<-vip(RF_NN_70)
+
+=========================================================================================
+#Classification in Testing set
+
+library(pROC)
+
+
+test_data<-fread("scaled_test_data_70.csv")
+
+
+ colnames(test_data)[c(12:21)]<-c("T2DM_Genetic_Liability",
+                            "BMI_Genetic_Liability",
+ 			    "WHR_Genetic_Liability",
+ 			    "Smoking_Initiation_Genetic_Liability",
+ 			    "Smoking_Cessation_Genetic_Liability",
+ 			    "Smoking_Heaviness_Genetic_Liability",
+  			    "HDL_Genetic_Liability",
+                            "LDL_Genetic_Liability",
+                           "Total_Cholesterol_Genetic_Liability",
+ 			    "Triglycerides_Genetic_Liability")
+
+ colnames(test_data)[4]<-"Smoking_Status"
+ colnames(test_data)[5]<-"Alcohol_Status"
+ colnames(test_data)[8]<-"Total_Cholesterol"
+ colnames(test_data)[11]<-"Sedentary_Lifestyle"
+
+
+test_data<-as.data.frame(unclass(test_data),stringsAsFactors = TRUE)
+----------------------------------------------------------------------------------------------------------------
+test_data<-test_data[,c(1,6,7,3,8,10,11,9,20,4,19)]
+
+                             
+test_data<-test_data %>% select(HTN,Age,BMI,Sex,Total_Cholesterol,LDL,Sedentary_Lifestyle,HDL,
+      Total_Cholesterol_Genetic_Liability,LDL_Genetic_Liability,Smoking_Status)
+
+--------------------------------------------------------------------------------------------------------------
+
+------------------------------------------------------------------------------------------------------------------------
+========================================================================================================================
+library(pROC)
+
+predict <- predict(RF_NN_70, test_data,type="prob",reshape = TRUE)
+
+#predict$predictions[2] same as predict$predictions$YES# second column of prediction
+
+test_data$predict_probability <- predict[,2]
+
+test_data$predicted_class<- ifelse(test_data$predict_probability > 0.5,"YES","NO")
+
+test_data<-as.data.frame(unclass(test_data),stringsAsFactors = TRUE)
+
+mean(test_data$HTN == test_data$predicted_class)#Accuracy
+
+
+===================================================================================================================
+=======================================================================================================================
+# Calculating the rea Under the Curve(AUC)
+
+auc(test_data$HTN,test_data$predict_probability)
+
+
+
+roc_score=roc(test_data$HTN,test_data$predict_probability,ci=TRUE)
+roc_score
+
+
+------------------------------------------------------------------------------------------------------
+#Plotting the Area Under the Curve(AUC)
+
+pROC_obj_roc <- roc(test_data$HTN,test_data$predict_probability,
+                smoothed = TRUE,
+                # arguments for ci
+                ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+                # arguments for plot
+                plot=TRUE, auc.polygon=TRUE, max.auc.polygon=TRUE, grid=TRUE,
+                print.auc=TRUE, show.thres=TRUE)
+------------------------------------------------------------------------------------------------------
+======================================================================================================
+
+=====================================================================================================================
+# Model validation (calibration) using Spielgelhalter z score
+
+library(rms)
+
+test_data<-test_data%>% mutate(HTN2=ifelse(HTN=="YES",1,0))
+
+val<-val.prob(test_data$predict_probability,test_data$HTN2,pl=TRUE,xlab="Predicted Probability",g=10, riskdist = "predicted")
+
+=================================================================================
+------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
+# Generating the Confusion Matrix
+
+library(caret)
+
+
+test_data$predicted_class<- ifelse(test_data$predict_probability > 0.5,"YES","NO")
+
+predicted_HTN<-as.factor(test_data$predicted_class)
+
+Actual_HTN<-as.factor(test_data$HTN)
+
+cm <-confusionMatrix(predicted_HTN, Actual_HTN, positive="YES", mode="everything")
+
+                                    
+----------------------------------------------------------------------------------
+cm$byClass
+         
+======================================================================================================
+---------------------------------------------------------------------------------------------------------------------------------------------------------

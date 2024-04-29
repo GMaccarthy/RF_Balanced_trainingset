@@ -1,0 +1,280 @@
+setwd("H:/Random_Forest_Reviewer_Request")# ToshibaHD(H:)
+rm(list = ls())
+library(data.table)
+library(ROSE)
+library(randomForest)
+library(vip)       # variable importance
+#library(tidyverse)
+library(readr)
+#library(tidymodels)
+#library(textrecipes)
+#library(LiblineaR)
+#library(tidytext)
+library(caret) #R.4.3.0
+library(randomForest)
+library(vip)       # variable importance
+library(tidyverse)
+library(readr)
+library(ranger) #R.4.2.2
+$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+
+===============================================================================================
+
+Data<-fread("BRIEF_Model_Data.csv")
+
+#define function to scale values between 0 and 1
+
+Categorical<-subset(Data, select= c("HTN","DM","Sex","Smoking","Alcohol"))
+
+Categorical<-as.data.frame(Categorical)
+
+  dim(Categorical)
+[1] 244718      5
+
+
+ Numerical<-Data[,-c(1,2,3,6,7)]
+
+  Numerical<-as.data.frame(Numerical)
+ 
+ dim(Numerical)
+[1] 244718     16
+
+ scale_values <- function(x){(x-min(x))/(max(x)-min(x))}
+
+ Numerical_rescaled <- scale_values(Numerical)
+
+ Numerical_rescaled<-as.data.frame(Numerical_scaled)
+
+
+
+ RescaledNumPredictors<-cbind(Categorical,Numerical_rescaled)
+
+ dim(RescaledNumPredictors)
+
+[1] 244718     21
+
+fwrite(RescaledNumPredictors,"RescaledNumPredictors.csv",sep=",")
+
+fwrite(RescaledNumPredictors,"BRFMODELDATA.csv",sep=",")
+
+===================================================================================================
+library(ROSE)
+library(caret)
+
+library(devtools)
+source_url('https://gist.githubusercontent.com/fawda123/7471137/raw/466c1474d0a505ff044412703516c34f1a4684a5/nnet_plot_update.r')
+
+
+# Partition the model_data into training and test sets
+ 
+# 70% of the data for training - these are row indices
+
+-----------------------------------------------------------------------------
+
+DATA<-fread("BRFMODELDATA.csv")
+
+set.seed(500)
+
+index <- createDataPartition( DATA$HTN, p = 0.7, list = FALSE)
+
+train_70 <-  DATA[index, ]
+
+table(train_70$HTN)
+
+
+prop.table(table(train_70$HTN))
+ 
+
+fwrite(train_70,"scaled_train_data_70.csv",sep=",")
+
+test_70<- DATA[-index, ]
+
+fwrite(test_70,"scaled_test_data_70.csv",sep=",")
+
+===================================================================================
+data<-fread("scaled_train_data_70.csv")
+
+test<-fread("scaled_test_data_70.csv")
+
+###################################################################################################
+
+#Subsampling Techniques
+
+#ROSE-package: ROSE: Random Over-Sampling Examples
+
+#install packages
+#install.packages("ROSE")
+library(ROSE)
+library(caret)
+library(vip)       # variable importance
+
+
+data<-fread("scaled_train_data_70csv")
+
+set.seed(500)
+
+
+data<-as.data.frame(unclass(data),stringsAsFactors = TRUE)
+
+ Balanced70_train <-ROSE(HTN ~ .,data = data)$data
+
+dim(Balanced70_train)
+                         
+ table(Balanced70_train$HTN) 
+
+prop.table(table(Balanced70_train$HTN))
+  
+fwrite(Balanced70_train, "Balanced70_train.csv",sep=",")
+
+====================================================================================
+
+train_data<-fread("Balanced70_train.csv")
+
+ colnames(train_data)[c(12:21)]<-c("T2DM_Genetic_Liability",
+                            "BMI_Genetic_Liability",
+ 			    "WHR_Genetic_Liability",
+ 			    "Smoking_Initiation_Genetic_Liability",
+ 			    "Smoking_Cessation_Genetic_Liability",
+ 			    "Smoking_Heaviness_Genetic_Liability",
+  			    "HDL_Genetic_Liability",
+                            "LDL_Genetic_Liability",
+                           "Total_Cholesterol_Genetic_Liability",
+ 			    "Triglycerides_Genetic_Liability")
+
+ colnames(train_data)[4]<-"Smoking_Status"
+ colnames(train_data)[5]<-"Alcohol_Status"
+ colnames(train_data)[8]<-"Total_Cholesterol"
+ colnames(train_data)[11]<-"Sedentary_Lifestyle"
+
+
+ train_data<-as.data.frame(unclass(train_data),stringsAsFactors = TRUE)
+
+library(ranger)
+set.seed(500)
+
+fitB_70 <- ranger(HTN ~.,
+                   data = train_data, 
+                   importance = 'permutation',
+                   local.importance = TRUE,
+                   scale.permutation.importance = TRUE,
+                   probability=TRUE)
+print(fitB_70)
+
+------------------------------------------------------------------------
+-----------------------------------------------------------------------------
+library(vip) 
+ 
+vip<-vi(fitB_70)
+
+vip[(1:10),]
+
+vip<-vip(fitB_70)
+vip$data
+
+
+
+----------------------------------------------------------------
+Predicting
+#get the prediction for the ranger model
+
+#Score Testing Set
+
+- Test set predictions
+=========================================================================================
+#Classification in Testing set
+
+library(pROC)
+
+
+test_data<-fread("scaled_test_data_70.csv")
+
+
+ colnames(test_data)[c(12:21)]<-c("T2DM_Genetic_Liability",
+                            "BMI_Genetic_Liability",
+ 			    "WHR_Genetic_Liability",
+ 			    "Smoking_Initiation_Genetic_Liability",
+ 			    "Smoking_Cessation_Genetic_Liability",
+ 			    "Smoking_Heaviness_Genetic_Liability",
+  			    "HDL_Genetic_Liability",
+                            "LDL_Genetic_Liability",
+                           "Total_Cholesterol_Genetic_Liability",
+ 			    "Triglycerides_Genetic_Liability")
+
+ colnames(test_data)[4]<-"Smoking_Status"
+ colnames(test_data)[5]<-"Alcohol_Status"
+ colnames(test_data)[8]<-"Total_Cholesterol"
+ colnames(test_data)[11]<-"Sedentary_Lifestyle"
+
+
+test_data<-as.data.frame(unclass(test_data),stringsAsFactors = TRUE)
+----------------------------------------------------------------------------------------------------------------
+========================================================================================================================
+library(pROC)
+
+predict <- predict(fitB_70, test_data,type="response",reshape = TRUE)
+
+#predict$predictions[2] same as predict$predictions$YES# second column of prediction
+
+test_data$predict_probability <- predict$predictions[,2]
+
+test_data$predicted_class<- ifelse(test_data$predict_probability > 0.5,"YES","NO")
+
+test_data<-as.data.frame(unclass(test_data),stringsAsFactors = TRUE)
+
+mean(test_data$HTN == test_data$predicted_class)#Accuracy
+
+
+===================================================================================================================
+=======================================================================================================================
+# Calculating the rea Under the Curve(AUC)
+
+auc(test_data$HTN,test_data$predict_probability)
+
+
+roc_score=roc(test_data$HTN,test_data$predict_probability,ci=TRUE)
+roc_score
+
+------------------------------------------------------------------------------------------------------
+#Plotting the Area Under the Curve(AUC)
+
+pROC_obj_roc <- roc(test_data$HTN,test_data$predict_probability,
+                smoothed = TRUE,
+                # arguments for ci
+                ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+                # arguments for plot
+                plot=TRUE, auc.polygon=TRUE, max.auc.polygon=TRUE, grid=TRUE,
+                print.auc=TRUE, show.thres=TRUE)
+------------------------------------------------------------------------------------------------------
+======================================================================================================
+
+=====================================================================================================================
+
+# Model validation (calibration) using Spielgelhalter z score
+
+library(rms)
+
+test_data<-test_data%>% mutate(HTN2=ifelse(HTN=="YES",1,0))
+
+val<-val.prob(test_data$predict_probability,test_data$HTN2,pl=TRUE,xlab="Predicted Probability",g=10, riskdist = "predicted")
+
+------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
+ # Generating the Confusion Matrix
+
+library(caret)
+
+test_data$predicted_class<- ifelse(test_data$predict_probability > 0.5,"YES","NO")
+
+predicted_HTN<-as.factor(test_data$predicted_class)
+
+Actual_HTN<-as.factor(test_data$HTN)
+
+cm <-confusionMatrix(predicted_HTN, Actual_HTN, positive="YES", mode="everything")
+                             
+---------------------------------------------------------------------------------------------------
+cm$byClass
+
+ 
+=================================================================================================================
+
+
