@@ -1,0 +1,137 @@
+rm(list = ls())
+library(data.table)
+library(ROSE)
+library(randomForest)
+library(vip)       # variable importance
+#library(tidyverse)
+library(readr)
+#library(tidymodels)
+#library(textrecipes)
+#library(LiblineaR)
+#library(tidytext)
+library(caret) #R.4.3.0
+library(randomForest)
+library(vip)       # variable importance
+library(tidyverse)
+library(readr)
+library(ranger) #R.4.2.2
+library(nnet)
+=================================================================================
+
+
+
+# clinical , demographic and lifestyle features:
+( Age, Diabete(DM), BMI, Sex, smoking status, drinking status, sedentary lifestyle, total cholestrol, LDL, HDL)
+Genetic factors: (BMI GRS, T2DM GRS Total cholesterol GRS, LDL GRS, HDL GRS,Triglyceride GRS, Smoking initiation GRS, Smoking cessatiin GRS, smoking Heaviness GRS)
+
+ train_data<-fread("Balanced_train70.csv")
+
+ train_data<-as.data.frame(unclass(train_data),stringsAsFactors = TRUE)
+-----------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------
+# Buliding Random Forest model using the clinical , demographic and lifestyle features Plus Genetic factors:
+
+library(ranger)
+set.seed(500)
+
+RF2 <- ranger(HTN ~.,
+                   data = train_data, 
+                   importance = 'permutation',
+                   local.importance = TRUE,
+                   scale.permutation.importance = TRUE,
+                   probability=TRUE)
+print(RF2)
+
+
+
+
+------------------------------------------------------------------------
+#Extracting The Variable importance (VIP)
+-----------------------------------------------------------------------------
+library(vip) 
+ 
+vip<-vi(RF2)
+
+vip[(1:10),]
+
+vip<-vip(NN_RF_80)
+
+vip$data
+
+------------------------------------------------------------------------=================================
+#Classification in Testing set
+
+library(pROC)
+
+test_data<-fread("scaled_test70.csv")
+
+test_data<-as.data.frame(unclass(test_data),stringsAsFactors = TRUE)
+------------------------------------------------------------------------
+=======================================================================================================================
+library(pROC)
+
+predict <- predict(RF2, test_data,type="response",reshape = TRUE)
+
+#predict$predictions[2] same as predict$predictions$YES# second column of prediction
+
+test_data$predict_probability <- predict$predictions[,2]
+
+test_data$predicted_class<- ifelse(test_data$predict_probability > 0.5,"YES","NO")
+
+test_data<-as.data.frame(unclass(test_data),stringsAsFactors = TRUE)
+
+mean(test_data$HTN == test_data$predicted_class)#Accuracy
+
+
+===================================================================================================================
+=======================================================================================================================
+#Calculating the Ares Under the Curve(AUC)
+
+auc(test_data$HTN,test_data$predict_probability)
+
+
+roc_score=roc(test_data$HTN,test_data$predict_probability,ci=TRUE)
+roc_score
+
+
+------------------------------------------------------------------------------------------------------
+#Plotting the Ares Under the Curve(AUC)
+
+pROC_obj_roc <- roc(test_data$HTN,test_data$predict_probability,
+                smoothed = TRUE,
+                # arguments for ci
+                ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+                # arguments for plot
+                plot=TRUE, auc.polygon=TRUE, max.auc.polygon=TRUE, grid=TRUE,
+                print.auc=TRUE, show.thres=TRUE)
+------------------------------------------------------------------------------------------------------
+======================================================================================================
+
+=====================================================================================================================
+#Model Validation (calibration) using Spiegelhalter z score 
+
+library(rms)
+
+test_data<-test_data%>% mutate(HTN2=ifelse(HTN=="YES",1,0))
+
+val<-val.prob(test_data$predict_probability,test_data$HTN2,pl=TRUE,xlab="Predicted Probability",g=10, riskdist = "predicted")
+
+
+------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
+#Genetrating the Confusion Matrix
+
+library(caret)
+
+predicted_HTN<-as.factor(test_data$predicted_class)
+
+Actual_HTN<-as.factor(test_data$HTN)
+
+cm <-confusionMatrix(predicted_HTN, Actual_HTN, positive="YES", mode="everything"
+----------------------------------------------------------------------------------------------------------
+cm$byClass
+
+
+
+
+

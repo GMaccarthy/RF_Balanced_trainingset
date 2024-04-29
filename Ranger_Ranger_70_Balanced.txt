@@ -1,0 +1,190 @@
+
+setwd("H:/Random_Forest_Reviewer_Request")# ToshibaHD(H:)
+rm(list = ls())
+library(data.table)
+library(ROSE)
+library(randomForest)
+library(vip)       # variable importance
+#library(tidyverse)
+library(readr)
+#library(tidymodels)
+#library(textrecipes)
+#library(LiblineaR)
+#library(tidytext)
+library(caret) #R.4.3.0
+library(randomForest)
+library(vip)       # variable importance
+library(tidyverse)
+library(readr)
+library(ranger) #R.4.2.2
+---------------------------------------------------------------------------
+====================================================================================
+
+train_data<-fread("Rescaled_Balanced70_train.csv")
+
+ colnames(train_data)[c(12:21)]<-c("T2DM_Genetic_Liability",
+                            "BMI_Genetic_Liability",
+ 			    "WHR_Genetic_Liability",
+ 			    "Smoking_Initiation_Genetic_Liability",
+ 			    "Smoking_Cessation_Genetic_Liability",
+ 			    "Smoking_Heaviness_Genetic_Liability",
+  			    "HDL_Genetic_Liability",
+                            "LDL_Genetic_Liability",
+                           "Total_Cholesterol_Genetic_Liability",
+ 			    "Triglycerides_Genetic_Liability")
+
+ colnames(train_data)[4]<-"Smoking_Status"
+ colnames(train_data)[5]<-"Alcohol_Status"
+ colnames(train_data)[8]<-"Total_Cholesterol"
+ colnames(train_data)[11]<-"Sedentary_Lifestyle"
+
+
+ train_data<-as.data.frame(unclass(train_data),stringsAsFactors = TRUE)
+
+========================================================================= 
+Variable                            Importance
+   <chr>                                    <dbl>
+ 1 Age                                   0.0254  
+ 2 BMI                                   0.0194  
+ 3 Sex                                   0.00629 
+ 4 Total_Cholesterol                     0.00574 
+ 5 LDLc                                  0.00487 
+ 6 Sedentary_Lifestyle                   0.00155 
+ 7 HDLc                                  0.00124 
+ 8 Total_Cholesterol_Genetic_Liability   0.00106 
+ 9 Smoking_Status                        0.000938
+10 LDL_Genetic_Liability                 0.000803
+--------------------------------------------------------------------------------
+#Feature Importance selected by Saturated Random Forest model(Fit70)
+
+train_data_1<-train_data[,c(1,6,7,3,8,10,11,9,20,4,19)]
+
+
+===================================================================================
+===================================================================================
+# Training Random Forest model with mFeature Importance selected by Saturated Random Forest model(Fit70)
+
+library(ranger)
+set.seed(500)
+
+Ranger_Ranger_70B <- ranger(HTN ~.,
+                   data = train_data_1, 
+                   importance = 'permutation',
+                   local.importance = TRUE,
+                   scale.permutation.importance = TRUE,
+                   probability=TRUE)
+
+print(Ranger_Ranger_70B)
+
+---------------------------------------------------------------------------------------
+#Extract Variable importance (VIP)
+
+library(vip) 
+ 
+vip<-vi(Ranger_Ranger_70B)
+
+vip[(1:10),]
+
+vip<-vip(Ranger_Ranger_70B)
+
+vip$data
+
+
+=========================================================================================
+#Classification in Testing set
+
+library(pROC)
+
+test_data<-fread("scaled_test_data_70.csv")
+
+
+ colnames(test_data)[c(12:21)]<-c("T2DM_Genetic_Liability",
+                            "BMI_Genetic_Liability",
+ 			    "WHR_Genetic_Liability",
+ 			    "Smoking_Initiation_Genetic_Liability",
+ 			    "Smoking_Cessation_Genetic_Liability",
+ 			    "Smoking_Heaviness_Genetic_Liability",
+  			    "HDL_Genetic_Liability",
+                            "LDL_Genetic_Liability",
+                           "Total_Cholesterol_Genetic_Liability",
+ 			    "Triglycerides_Genetic_Liability")
+
+ colnames(test_data)[4]<-"Smoking_Status"
+ colnames(test_data)[5]<-"Alcohol_Status"
+ colnames(test_data)[8]<-"Total_Cholesterol"
+ colnames(test_data)[11]<-"Sedentary_Lifestyle"
+
+
+test_data<-as.data.frame(unclass(test_data),stringsAsFactors = TRUE)
+----------------------------------------------------------------------------------------------------------------
+test_data_1<-test_data[,c(1,6,7,3,8,10,11,9,20,4,19)]
+
+========================================================================================================================
+library(pROC)
+
+predict <- predict(Ranger_Ranger_70B, test_data_1,type="response",reshape = TRUE)
+
+#predict$predictions[2] same as predict$predictions$YES# second column of prediction
+
+test_data_1$predict_probability <- predict$predictions[,2]
+
+test_data_1$predicted_class<- ifelse(test_data_1$predict_probability > 0.5,"YES","NO")
+
+test_data<-as.data.frame(unclass(test_data_1),stringsAsFactors = TRUE)
+
+mean(test_data_1$HTN == test_data_1$predicted_class)#Accuracy
+
+
+===================================================================================================================
+=======================================================================================================================
+
+# Calculating the Area Under the Curve(AUC)
+
+auc(test_data$HTN,test_data$predict_probability)
+
+roc_score=roc(test_data$HTN,test_data$predict_probability,ci=TRUE)
+roc_score
+
+
+------------------------------------------------------------------------------------------------------
+#Plotting the Area Under the Curve(AUC)
+
+pROC_obj_roc <- roc(test_data$HTN,test_data$predict_probability,
+                smoothed = TRUE,
+                # arguments for ci
+                ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+                # arguments for plot
+                plot=TRUE, auc.polygon=TRUE, max.auc.polygon=TRUE, grid=TRUE,
+                print.auc=TRUE, show.thres=TRUE)
+------------------------------------------------------------------------------------------------------
+======================================================================================================
+
+=====================================================================================================================
+
+# Model validation (calibration) using Spielgelhalter z score
+
+
+library(rms)
+
+test_data<-test_data%>% mutate(HTN2=ifelse(HTN=="YES",1,0))
+
+val<-val.prob(test_data$predict_probability,test_data$HTN2,pl=TRUE,xlab="Predicted Probability",g=10, riskdist = "predicted")
+
+
+=================================================================================
+------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
+ # Generating the Confusion Matrix
+
+library(caret)
+
+test_data$predicted_class<- ifelse(test_data$predict_probability > 0.5,"YES","NO")
+
+predicted_HTN<-as.factor(test_data$predicted_class)
+
+Actual_HTN<-as.factor(test_data$HTN)
+
+cm <-confusionMatrix(predicted_HTN, Actual_HTN, positive="YES", mode="everything")
+                                    
+----------------------------------------------------------------------------------
+cm$byClass
